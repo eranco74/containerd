@@ -1,0 +1,4 @@
+[plugins]
+  [plugins.cri.cni]
+  bin_dir = "/var/lib/cni/bin"
+  conf_dir = "/var/run/multus/cni/net.d/"

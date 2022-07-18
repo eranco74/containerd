@@ -1,0 +1,79 @@
+variant: openshift
+version: 4.11.0
+metadata:
+  name: 98-containerd-config
+  labels:
+    machineconfiguration.openshift.io/role: worker
+systemd:
+  units:
+    - name: containerd.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=containerd container runtime
+        Documentation=https://containerd.io
+        After=network.target local-fs.target replace-crio-with-containerd.service
+        [Service]
+        ExecStartPre=-/sbin/modprobe overlay
+        ExecStart=/bin/containerd --config /etc/containerd/config.toml
+        Type=notify
+        Delegate=yes
+        KillMode=process
+        Restart=always
+        RestartSec=5
+        # Having non-zero Limit*s causes performance problems due to accounting overhead
+        # in the kernel. We recommend using cgroups to do container-local accounting.
+        LimitNPROC=infinity
+        LimitCORE=infinity
+        LimitNOFILE=infinity
+        # Comment TasksMax if your systemd version does not supports it.
+        # Only systemd 226 and above support this version.
+        TasksMax=infinity
+        OOMScoreAdjust=-999
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: fake-crio-sock-for-sdn.service
+      enabled: true
+      contents: |
+        [Install]
+        WantedBy=multi-user.target
+        [Unit]
+        Description=Fake CRI-O socket for OpenShift SDN
+        Requires=containerd.service
+        After=containerd.service
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/sh -c "mkdir -p /var/run/crio && touch /var/run/crio/crio.sock && mount --bind /var/run/containerd/containerd.sock /var/run/crio/crio.sock"
+
+    - name: replace-crio-with-containerd.service
+      enabled: true
+      contents: |
+        [Install]
+        WantedBy=multi-user.target
+        [Unit]
+        Description=replace CRI-O with containerd
+        Requires=network.target
+        After=ostree-finalize-staged.service
+        [Service]
+        Type=oneshot
+        Restart=on-failure
+        RestartSec=30
+        ExecStartPre=/bin/mkdir -p /opt/replace-crio-with-containerd
+        WorkingDirectory=-/opt/replace-crio-with-containerd
+        ExecStart=/usr/local/bin/replace-crio-with-containerd.sh
+storage:
+  files:
+    - path: /etc/containerd/config.toml
+      contents:
+        local: /etc/containerd/config.toml
+      mode: 0644
+    - path: /etc/crictl.yaml
+      contents:
+        local: /etc/crictl.yaml
+      mode: 0644
+    - path: /usr/local/bin/replace-crio-with-containerd.sh
+      contents:
+        local: /usr/local/bin/replace-crio-with-containerd.sh
+      mode: 0744
+
