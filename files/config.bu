@@ -57,11 +57,17 @@ systemd:
         After=ostree-finalize-staged.service
         [Service]
         Type=oneshot
-        Restart=on-failure
-        RestartSec=30
         ExecStartPre=/bin/mkdir -p /opt/replace-crio-with-containerd
         WorkingDirectory=-/opt/replace-crio-with-containerd
-        ExecStart=/usr/local/bin/replace-crio-with-containerd.sh
+        # Would prefer to do Restart=on-failure instead of this bash retry loop, but
+        # the version of systemd we have right now (239) doesn't support it. It should be
+        # available in systemd v244 and higher.
+        ExecStart=/bin/bash -c " \
+          until /usr/local/bin/replace-crio-with-containerd.sh; \
+          do \
+          echo 'Failed to execute replace-crio-with-containerd.sh, going to retry in 10 seconds' \
+          sleep 10; \
+          done"
 storage:
   files:
     - path: /etc/containerd/config.toml
