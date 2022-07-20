@@ -27,11 +27,7 @@ fi
 #TODO: need to to this some other way
 if [ ! -f configure-kubelet.done ]; then
   echo "Configure kubelet"
-  # This should update the Requires and After dependencies
-  sed -i s'/crio.service/containerd.service/'g /etc/systemd/system/kubelet.service
-
-  sed -i s'/--container-runtime-endpoint=\/var\/run\/crio\/crio.sock/--container-runtime-endpoint=\/var\/run\/containerd\/containerd.sock/'g /etc/systemd/system/kubelet.service
-  sed -i s'/--runtime-cgroups=\/system.slice\/crio.service/--runtime-cgroups=\/system.slice\/containerd.service/'g /etc/systemd/system/kubelet.service
+  sed -i s'/crio/containerd/'g /etc/systemd/system/kubelet.service
   touch configure-kubelet.done
 fi
 
