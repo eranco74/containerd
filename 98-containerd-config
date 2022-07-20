@@ -23,7 +23,7 @@ spec:
           path: /etc/crictl.yaml
         - contents:
             compression: gzip
-            source: data:;base64,H4sIAAAAAAAC/5yUTU/bQBCG7/4VA6lEe1gv4UuIikNVOLSHUiFudVVtdsfxCntm2Y8EUH98tY4diAA1rRQp0mjmmXdez85kR6bg5cySRFrATIWmCBhBYOJLcNZhrWwLkwmIS2AXLRMsbduCVikg1Il0jgWIDJYa9DZC9MoVRWFr+AGiBo+uVRqF9pbF0sZGaKaoLKE3pWFC+PkRYoNUAKBuGHa/cWwszTPT8G4O39sI+0VtR+zOCtzxYsV9nXOdEzIop2SOd53gED0i8AK9twYHCrx7710H4k7B77lHl0sEfygAIifdvOjVa3mSYilE1bbDZEhvTXbBS2pZmV7U2oUsTSffgrgC8RWaGN2ZlE7pWzXHUGISGil61YppqTr1yKSWodTcyYP96Wm5fyiTMypikMogzo6Pj2aqPpb3pye/To7k94EjnxqKaXlUTg/FQZmBjzQtV7mld12xFvtlNdRLrc9sHAaHLdmjnW/4tfrCk5uri6szIESTVyD/GhsgcIfAsUEPS/XwzHzNVNt58ihu0wxbjK97/3lMgyEtjzKBm57dcGoNrGzMZXCNd8l6DKDIwKc6ogeDDskgaYuhAAhoQFgIe7LfioB+YTU+c3kd2puDxKhleAgROzP8y1HtkFZsMMXTKxE+UbQdCiTj2FI8r+RC+Ur6RFXfvBoksL79h8K10GpDdIZsqXhT8NhNzz0nF86roawMrdVYbdq0Rfp/Gzlu2euL0S/Z+BwJh/s0ngnIF2pj38cD8JcrNjKvccYc+/PVIBAb3C18Hyv+BAAA//8UjlOcbQUAAA==
+            source: data:;base64,H4sIAAAAAAAC/4ySQW/UMBCF7/4V010OcLC9aXerCq70AAdAvSKEHGeysUhmjD3ZrSp+PHI2aUFlRa+j8ef33rz1hR1zsnUgi3SA2uVOZRTQOPItxBCxdaGH9Rr0LXCUwATH0Pfg3ZgR2pF8mWUQhkAdpiAgyUWlVGjhK+gWEsbeedQ+BdbHIJ32TOICYWpMw4Tw7R1Ih6QA0HcMq08sXaB9YTa8KuP7ILBRbViwFyfwwIcT99+cu7JQQGWlcFIcNGdJiMAHTCk0OFPg1esUB9A/HfzaJ4zlieY3CkB49N2zvyYtT1ICZXF9PztDOufsPR+pZ9dMoh5TKNL8mHrQn0F/hE4kvrU2Ov/D7TEbHLVHkuR6XRk3uAcmd8zG82AvN9WN2VzZMTZOMFvXINa73bZ27c7e31x/v97aLzPHPn2oK7M11ZW+NAX4QJU57ZoUB/Uo9sPJ1HOtf8Q4G4cXspc4z+Q1pbokRThXZ7kglPL8JWW5zX8KtjDvsGaWqVkdAnGDK5WmmfodAAD//9HP52kIAwAA
           mode: 484
           path: /usr/local/bin/replace-crio-with-containerd.sh
     systemd:
@@ -54,6 +54,51 @@ spec:
             WantedBy=multi-user.target
           enabled: true
           name: containerd.service
+        - contents: |
+            [Unit]
+            Description=Kubernetes Kubelet
+            Wants=rpc-statd.service network-online.target
+            Requires=containerd.service kubelet-auto-node-size.service
+            After=network-online.target containerd.service kubelet-auto-node-size.service
+            After=ostree-finalize-staged.service
+
+            [Service]
+            Type=notify
+            ExecStartPre=/bin/mkdir --parents /etc/kubernetes/manifests
+            ExecStartPre=/bin/rm -f /var/lib/kubelet/cpu_manager_state
+            ExecStartPre=/bin/rm -f /var/lib/kubelet/memory_manager_state
+            EnvironmentFile=/etc/os-release
+            EnvironmentFile=-/etc/kubernetes/kubelet-workaround
+            EnvironmentFile=-/etc/kubernetes/kubelet-env
+            EnvironmentFile=/etc/node-sizing.env
+
+            ExecStart=/usr/bin/hyperkube \
+                kubelet \
+                  --config=/etc/kubernetes/kubelet.conf \
+                  --bootstrap-kubeconfig=/etc/kubernetes/kubeconfig \
+                  --kubeconfig=/var/lib/kubelet/kubeconfig \
+                  --container-runtime=remote \
+                  --container-runtime-endpoint=/var/run/containerd/containerd.sock \
+                  --runtime-cgroups=/system.slice/containerd.service \
+                  --node-labels=node-role.kubernetes.io/worker,node.openshift.io/os_id=${ID} \
+                  --node-ip=${KUBELET_NODE_IP} \
+                  --address=${KUBELET_NODE_IP} \
+                  --minimum-container-ttl-duration=6m0s \
+                  --volume-plugin-dir=/etc/kubernetes/kubelet-plugins/volume/exec \
+                  --cloud-provider= \
+                   \
+                  --hostname-override=${KUBELET_NODE_NAME} \
+                  --pod-infra-container-image=quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3eae807eb2d1f539ffa799861749eddb8606932fbfd6ef5e82aaa287348b7a07 \
+                  --system-reserved=cpu=${SYSTEM_RESERVED_CPU},memory=${SYSTEM_RESERVED_MEMORY} \
+                  --v=${KUBELET_LOG_LEVEL}
+
+            Restart=always
+            RestartSec=10
+
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: kubelet.service
         - contents: |
             [Install]
             WantedBy=multi-user.target

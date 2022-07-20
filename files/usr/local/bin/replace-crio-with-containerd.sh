@@ -23,14 +23,6 @@ if [ ! -f install-contaienrd.done ]; then
   touch install-contaienrd.done
 fi
 
-
-#TODO: need to to this some other way
-if [ ! -f configure-kubelet.done ]; then
-  echo "Configure kubelet"
-  sed -i s'/crio/containerd/'g /etc/systemd/system/kubelet.service
-  touch configure-kubelet.done
-fi
-
 echo "Done replacing crio with containerd"
 touch replace-crio-with-containerd.done
 
